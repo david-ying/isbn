@@ -1,0 +1,1704 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>武陵高中圖書館｜ISBN 書籍查詢與 Excel/PPT 簡介處理系統</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- SheetJS (xlsx) CDN for Excel/CSV parsing & exporting -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- PptxGenJS CDN for PowerPoint (.pptx) generation -->
+  <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+  <!-- Google Fonts: Noto Serif TC & Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600;700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#FAF8F5',
+              100: '#F3EFE6',
+              200: '#E5DCB9',
+              500: '#D97706',
+              600: '#B45309',
+              800: '#1E293B',
+              900: '#0F172A',
+            },
+            slateNavy: '#1E293B',
+            warmPaper: '#FAF8F5',
+            accentGold: '#D97706',
+          },
+          fontFamily: {
+            serifTC: ['"Noto Serif TC"', 'serif'],
+            sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    body {
+      background-color: #FAF8F5;
+      color: #1E293B;
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    }
+    .font-serif-tc {
+      font-family: 'Noto Serif TC', serif;
+    }
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(226, 232, 240, 0.8);
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #F1F5F9;
+      border-radius: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #94A3B8;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-amber-200 selection:text-amber-900">
+
+  <!-- Header & Mode Navigation -->
+  <header class="sticky top-0 z-30 glass-panel border-b border-slate-200/80 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <!-- Logo & System Title -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-white shadow-md shadow-amber-500/20 shrink-0">
+          <i class="fa-solid fa-book-bookmark text-lg"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base sm:text-lg font-bold text-slate-900 font-serif-tc tracking-tight leading-none">
+              武陵高中圖書館 · 書目與簡報系統
+            </h1>
+            <span class="hidden md:inline-block px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold border border-amber-200">
+              WLSH Library
+            </span>
+          </div>
+          <p class="text-xs text-slate-500 mt-1 font-sans hidden sm:block">
+            桃園市立武陵高級中等學校圖書館 · 支援 Excel 自動填入簡介與一鍵導出電視牆 PPT
+          </p>
+        </div>
+      </div>
+
+      <!-- Main Navigation Tabs & API Settings -->
+      <div class="flex items-center gap-2">
+        <div class="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+          <button id="modeBtnSingle" onclick="switchAppMode('single')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-sm">
+            <i class="fa-solid fa-magnifying-glass mr-1 text-amber-600"></i>單本查詢
+          </button>
+          <button id="modeBtnBatch" onclick="switchAppMode('batch')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-600 hover:text-slate-900">
+            <i class="fa-solid fa-file-excel mr-1 text-emerald-600"></i>Excel 批次處理
+          </button>
+        </div>
+
+        <button onclick="openApiKeyModal()" title="設定選用 Gemini API Key（僅存於本機瀏覽器）" class="px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 bg-white hover:bg-amber-50 hover:text-amber-700 border border-slate-200 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-key text-amber-500"></i>
+          <span class="hidden lg:inline">API 設定</span>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+    <!-- ==================== MODE 1: SINGLE ISBN LOOKUP ==================== -->
+    <div id="modeSingleSection">
+      
+      <!-- Search Input Section -->
+      <section class="max-w-3xl mx-auto text-center mb-8">
+        <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-900 font-serif-tc mb-2">
+          輸入 ISBN 碼，秒查完整繁體中文書籍簡介
+        </h2>
+        <p class="text-xs sm:text-sm text-slate-600 mb-6">
+          支援台灣 ISBN (978626 / 978986 / 978957 等)，直接擷取完整原文簡介，並支援一鍵匯出左文右圖 PPT。
+        </p>
+
+        <!-- Search Bar -->
+        <div class="relative max-w-2xl mx-auto shadow-lg rounded-2xl bg-white border border-slate-200 p-2 flex flex-col sm:flex-row items-center gap-2">
+          <div class="relative w-full flex items-center pl-3">
+            <i class="fa-solid fa-barcode text-slate-400 text-lg mr-2"></i>
+            <input 
+              type="text" 
+              id="isbnInput" 
+              placeholder="請輸入 10 或 13 碼 ISBN，如: 9786267913550" 
+              class="w-full py-2.5 text-slate-800 placeholder-slate-400 text-sm focus:outline-none font-mono"
+              onkeyup="if(event.key==='Enter') executeIsbnSearch()"
+            >
+            <button id="clearInputBtn" onclick="clearSearchInput()" class="hidden text-slate-300 hover:text-slate-500 p-2">
+              <i class="fa-solid fa-circle-xmark"></i>
+            </button>
+          </div>
+          <button 
+            onclick="executeIsbnSearch()" 
+            class="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white font-semibold rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 shrink-0">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <span>即刻查詢</span>
+          </button>
+        </div>
+
+        <!-- Quick Test Buttons -->
+        <div class="mt-4 flex flex-wrap items-center justify-center gap-2 text-xs text-slate-500">
+          <span class="font-medium text-slate-400"><i class="fa-solid fa-wand-magic-sparkles text-amber-500 mr-1"></i>熱門範例：</span>
+          <button onclick="quickTestIsbn('9786267913550')" class="px-2.5 py-1 bg-white hover:bg-amber-50 border border-slate-200 rounded-lg text-slate-700 transition">
+            雅思閱讀高分技巧 (9786267913550)
+          </button>
+          <button onclick="quickTestIsbn('9786264188692')" class="px-2.5 py-1 bg-white hover:bg-amber-50 border border-slate-200 rounded-lg text-slate-700 transition">
+            不靠人類過一年 (9786264188692)
+          </button>
+          <button onclick="quickTestIsbn('9789863986478')" class="px-2.5 py-1 bg-white hover:bg-amber-50 border border-slate-200 rounded-lg text-slate-700 transition">
+            原子習慣 (9789863986478)
+          </button>
+        </div>
+      </section>
+
+      <!-- Progress / Loading Status Card -->
+      <div id="searchProgressCard" class="hidden max-w-2xl mx-auto mb-8 bg-white border border-amber-200 rounded-2xl p-5 shadow-sm">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <div class="w-3 h-3 rounded-full bg-amber-500 animate-ping"></div>
+            <span id="progressStepTitle" class="text-sm font-bold text-slate-800">正在快速檢索書籍資料庫...</span>
+          </div>
+          <span id="progressStepPercent" class="text-xs font-mono font-semibold text-amber-600">50%</span>
+        </div>
+        <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+          <div id="progressBarInner" class="bg-gradient-to-r from-amber-500 to-amber-600 h-full w-1/2 transition-all duration-300 rounded-full"></div>
+        </div>
+        <p id="progressSubDetail" class="text-xs text-slate-500 mt-2 font-mono">
+          > 正檢索書籍資料與繁體中文內容簡介...
+        </p>
+      </div>
+
+      <!-- Empty Welcome Prompt -->
+      <div id="emptyState" class="max-w-md mx-auto text-center py-12 px-4">
+        <div class="w-16 h-16 bg-amber-50 rounded-2xl mx-auto flex items-center justify-center text-amber-600 text-2xl mb-3 border border-amber-100">
+          <i class="fa-solid fa-book-open"></i>
+        </div>
+        <h3 class="text-base font-bold text-slate-800 font-serif-tc mb-1">開始書籍檢索</h3>
+        <p class="text-xs text-slate-500">
+          輸入 ISBN 後點擊查詢，系統將秒速展示書籍封面、標題與完整原文內容簡介。
+        </p>
+      </div>
+
+      <!-- Single Book Result Display Card -->
+      <div id="bookResultContainer" class="hidden max-w-4xl mx-auto bg-white rounded-3xl border border-slate-200/90 shadow-xl overflow-hidden mb-8">
+        <div class="p-6 sm:p-8 flex flex-col sm:flex-row gap-6 items-start">
+          
+          <!-- Book Cover -->
+          <div class="shrink-0 mx-auto sm:mx-0 w-44 h-60 rounded-2xl overflow-hidden shadow-lg border border-slate-200 bg-slate-100 relative">
+            <img id="bookCoverImg" src="" alt="書籍封面" class="w-full h-full object-cover hidden">
+            <div id="bookCoverSvg" class="w-full h-full flex flex-col items-center justify-center p-4 text-slate-400 bg-slate-100 text-xs text-center">
+              <i class="fa-solid fa-spinner fa-spin text-amber-500 text-lg mb-2"></i>
+              <span>正在載入真實書封...</span>
+            </div>
+          </div>
+
+          <!-- Metadata -->
+          <div class="flex-grow w-full">
+            <div class="flex flex-wrap items-center gap-2 mb-2">
+              <span id="badgeIsbn" class="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 font-mono text-xs font-semibold">
+                ISBN: --
+              </span>
+              <span id="badgePublisher" class="px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 text-xs font-medium border border-amber-200">
+                出版社: --
+              </span>
+            </div>
+
+            <h2 id="bookTitle" class="text-xl sm:text-2xl font-extrabold text-slate-900 font-serif-tc leading-snug mb-1">
+              書名
+            </h2>
+            <p id="bookSubTitle" class="text-xs text-slate-500 mb-4">
+              副標題 / 原文書名
+            </p>
+
+            <div class="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs mb-4">
+              <div>
+                <span class="text-slate-400 block">作者 / 譯者</span>
+                <span id="infoAuthor" class="font-bold text-slate-800">--</span>
+              </div>
+              <div>
+                <span class="text-slate-400 block">出版日期 / 頁數</span>
+                <span id="infoDatePages" class="font-semibold text-slate-700">--</span>
+              </div>
+            </div>
+
+            <!-- Action Toolbar Buttons -->
+            <div class="flex flex-wrap items-center gap-3">
+              <button onclick="exportSingleToPPT()" class="px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-medium text-xs transition flex items-center gap-2 shadow-sm">
+                <i class="fa-solid fa-file-powerpoint text-orange-200"></i>
+                <span>匯出此書 PPT</span>
+              </button>
+
+              <a id="linkBooksTW" href="#" target="_blank" rel="noopener noreferrer" class="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl text-xs font-semibold flex items-center gap-1">
+                <span>博客來比價</span>
+                <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+              </a>
+              <a id="linkEslite" href="#" target="_blank" rel="noopener noreferrer" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1">
+                <span>誠品線上</span>
+                <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+              </a>
+              <a id="linkNcl" href="#" target="_blank" rel="noopener noreferrer" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1">
+                <span>國家圖書館 ISBN</span>
+                <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Full Summary Area -->
+        <div class="border-t border-slate-200 p-6 sm:p-8 bg-white">
+          <h3 class="text-sm font-bold text-slate-900 font-serif-tc mb-3 flex items-center gap-2">
+            <i class="fa-solid fa-align-left text-amber-600"></i>
+            【完整內容簡介原文】
+          </h3>
+          <div id="bookSummaryText" class="text-sm text-slate-700 leading-relaxed font-serif-tc whitespace-pre-line bg-slate-50/70 p-4 rounded-xl border border-slate-200/80">
+            簡介載入中...
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ==================== MODE 2: BATCH EXCEL / CSV PROCESSOR ==================== -->
+    <div id="modeBatchSection" class="hidden">
+      
+      <!-- Batch Top Card -->
+      <div class="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-sm mb-6">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+          <div>
+            <h2 class="text-xl font-bold text-slate-900 font-serif-tc flex items-center gap-2">
+              <i class="fa-solid fa-file-excel text-emerald-600"></i>
+              Excel / CSV 批次自動寫入簡介
+            </h2>
+            <p class="text-xs text-slate-500 mt-1">
+              直接拖入包含 ISBN 與書名的 Excel (.xlsx / .csv) 檔案，系統會自動在最右側填入中文簡介，並完整保留原本的所有欄位。
+            </p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="downloadSampleExcel()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition flex items-center gap-1">
+              <i class="fa-solid fa-download text-slate-500"></i>
+              <span>下載範例 Excel</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- File Upload Drag Drop Box -->
+        <div 
+          id="dropZone" 
+          onclick="document.getElementById('excelFileInput').click()"
+          ondragover="handleDragOver(event)"
+          ondragleave="handleDragLeave(event)"
+          ondrop="handleFileDrop(event)"
+          class="border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-2xl p-8 text-center bg-slate-50/50 hover:bg-emerald-50/20 transition cursor-pointer"
+        >
+          <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleFileSelect(event)">
+          <div class="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-2xl mx-auto flex items-center justify-center text-xl mb-3">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+          </div>
+          <p class="text-sm font-bold text-slate-800 mb-1">
+            點擊選擇檔案 或 將 Excel/CSV 檔拖曳至此處
+          </p>
+          <p class="text-xs text-slate-400">
+            支援 .xlsx, .xls, .csv 檔案格式 (優先讀取 Excel 內原有書名，並支援 20 筆併行與最多 5 次自動重試)
+          </p>
+        </div>
+
+        <!-- Control Action Bar -->
+        <div id="batchControlBar" class="hidden mt-6 flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-slate-100">
+          <div class="text-xs font-semibold text-slate-700 flex flex-wrap items-center gap-2">
+            <span id="batchTotalCountBadge" class="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-lg">
+              共 0 筆資料
+            </span>
+            <span id="batchProgressStatus" class="text-slate-600">準備就緒</span>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <button id="btnStartBatch" onclick="startBatchProcessing()" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition shadow-md flex items-center gap-1.5">
+              <i class="fa-solid fa-bolt"></i>
+              <span>自動填入內容簡介</span>
+            </button>
+            <button id="btnStopBatch" onclick="stopBatchProcessing()" class="hidden px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs transition shadow-md flex items-center gap-1.5">
+              <i class="fa-solid fa-hand"></i>
+              <span>停止查詢</span>
+            </button>
+            <button id="btnExportExcel" onclick="exportProcessedExcel()" class="px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs transition shadow-md flex items-center gap-1.5">
+              <i class="fa-solid fa-file-export text-emerald-400"></i>
+              <span>匯出最新 Excel (.xlsx)</span>
+            </button>
+            <button id="btnExportPPT" onclick="exportBatchToPPT()" class="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl text-xs transition shadow-md flex items-center gap-1.5">
+              <i class="fa-solid fa-file-powerpoint text-orange-200"></i>
+              <span>一鍵匯出 PPT 簡報 (.pptx)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Failed Book Numbers Alert Banner (Shown if any book fails after 5 attempts) -->
+        <div id="batchFailedAlert" class="hidden mt-4 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-start gap-2.5">
+          <i class="fa-solid fa-triangle-exclamation text-rose-600 text-base mt-0.5"></i>
+          <div id="batchFailedAlertText"></div>
+        </div>
+
+      </div>
+
+      <!-- Batch Data Preview Table Card -->
+      <div id="batchTableCard" class="hidden bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-600">數據預覽與簡介填寫結果</h3>
+          <span class="text-[11px] text-slate-400">表格可直接滾動瀏覽</span>
+        </div>
+        <div class="overflow-x-auto max-h-[500px] custom-scrollbar">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead class="bg-slate-100 text-slate-700 sticky top-0 z-10 font-bold border-b border-slate-200">
+              <tr>
+                <th class="p-3 w-14 text-center">編號</th>
+                <th class="p-3 w-16 text-center">封面</th>
+                <th class="p-3 w-40 font-mono">ISBN</th>
+                <th class="p-3 w-52">書名 (優先讀取 Excel)</th>
+                <th class="p-3">內容簡介 (自動填入最右側欄位)</th>
+                <th class="p-3 w-36 text-center">處理狀態</th>
+              </tr>
+            </thead>
+            <tbody id="batchTableBody" class="divide-y divide-slate-100 text-slate-700">
+              <!-- Rows inserted dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-white border-t border-slate-200 mt-12 py-6">
+    <div class="max-w-7xl mx-auto px-4 text-center text-xs text-slate-500 space-y-1">
+      <p class="font-serif-tc font-semibold text-slate-700">
+        📚 桃園市立武陵高級中等學校圖書館（武陵高中圖書館）· ISBN 書目與簡報自動化系統
+      </p>
+      <p class="text-[11px] text-slate-400">
+        支援單本檢索、Excel 批次簡介填寫與 16:9 電視牆新書導讀 PPT 一鍵生成
+      </p>
+    </div>
+  </footer>
+
+  <!-- Optional Gemini API Key Modal (Safe for Public GitHub Pages Hosting) -->
+  <div id="apiKeyModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+      <div class="flex justify-between items-center mb-3">
+        <h3 class="text-base font-bold text-slate-900 font-serif-tc flex items-center gap-2">
+          <i class="fa-solid fa-key text-amber-500"></i>
+          武陵高中圖書館 · AI 深度檢索金鑰設定
+        </h3>
+        <button onclick="closeApiKeyModal()" class="text-slate-400 hover:text-slate-600 p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <p class="text-xs text-slate-600 leading-relaxed mb-4">
+        本系統預設已可直接使用 Google Books 公開圖書庫進行查詢。若館員在 GitHub Pages 線上版遇到冷門中文新書需要啟用 AI 全網深度搜尋，可在此填入 Gemini API Key（<strong>僅儲存在您這台電腦的瀏覽器中，不會上傳至 GitHub</strong>）。
+      </p>
+      <div class="mb-4">
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Gemini API Key（選填）</label>
+        <input 
+          type="password" 
+          id="customApiKeyInput" 
+          placeholder="AIzaSy..." 
+          class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-mono focus:outline-none focus:border-amber-500"
+        >
+      </div>
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+        <button onclick="clearApiKey()" class="px-3 py-1.5 rounded-xl text-xs text-rose-600 hover:bg-rose-50 border border-rose-200">
+          清除金鑰
+        </button>
+        <button onclick="saveApiKey()" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-sm">
+          儲存設定
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-10 opacity-0 transition-all duration-300 pointer-events-none bg-slate-900 text-white text-xs px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2 border border-slate-700">
+    <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400"></i>
+    <span id="toastMessage">提示訊息</span>
+  </div>
+
+  <!-- ==================== JAVASCRIPT ENGINE ==================== -->
+  <script>
+    /* STATE VARIABLES */
+    let isBatchProcessingActive = false;
+    let batchDataRows = [];
+    let originalHeaderRow = [];
+    let currentSingleBookData = null;
+
+    /* LOCAL HIGH-PRECISION PRESET BOOKS (INSTANT ZERO-WAIT) */
+    const LOCAL_PRESET_BOOKS = {
+      "9786267913550": {
+        isbn: "9786267913550",
+        title: "雅思閱讀高分技巧，三步驟突破6.5+",
+        subtitle: "Reading for IELTS 5-6+ (B1+) (Collins English for Exams)",
+        authors: ["艾兒思凡蓋特（Els Van Geyte）", "蘿娜史妮玲（Rhona Snelling）"],
+        publisher: "EZ叢書館",
+        publishDate: "2026-10-01",
+        pages: 208,
+        summary: "「從 5.5 到 6.5，差的不是天分，而是方法！」\n本書源自英國知名教育出版機構 Collins 官方雅思檢定教材，專為目標雅思閱讀 6.5 分以上的考生量身設計。雅思閱讀考試最大的挑戰往往不是文章看不懂，而是 60 分鐘內必須完成三篇長文與 40 題挑戰，時間極為緊迫。\n\n全書以獨創的「三步驟學習法」，引導讀者從主題字彙、閱讀策略到解題技巧循序漸進提升實力：\nStep 1 語言能力發展：建立高頻主題詞彙基礎與前後文語意推估能力。\nStep 2 考試技巧培養：完整拆解標題配對、True/False/Not Given 與填空題型。\nStep 3 仿真模考實戰：提供全真模擬試題演練，培養考場時間分配能力。",
+        coverUrl: "https://im1.book.com.tw/image/getImage?i=https://www.books.com.tw/web/sys_bbot/v1/0011062775.jpg&v=66f65dd4k&w=348&h=348"
+      },
+      "9786264188692": {
+        isbn: "9786264188692",
+        title: "不靠人類過一年：華爾街記者365日全AI生活實錄",
+        subtitle: "I Am Not a Robot: My Year Using AI to Do (Almost) Everything",
+        authors: ["喬安娜．斯特恩（Joanna Stern）"],
+        publisher: "遠流出版",
+        publishDate: "2026-10-29",
+        pages: 336,
+        summary: "「如果把生活裡『能交給 AI 的事』全部交出去，一年之後，你會變成什麼樣的人？」\n\n榮獲艾美獎肯定的《華爾街日報》資深科技記者喬安娜．斯特恩，展開了一場為期一年的「全 AI」極致生活實驗——從健康管理、家庭旅行，到最私密的人際溝通，全部交由人工智慧協助與決策。\n\n本書宛如一台駛向不久將來的時光機，在那裡，AI 號稱能充當你的醫生、司機、老師與助手。作者以幽默且直白的第一線導遊身分，親自擔任「人類白老鼠」，記錄下哪些事 AI 做得比人好、哪些事像人卻終究不是人，以及當我們習慣依賴科技後，究竟失去了什麼。",
+        coverUrl: "https://im1.book.com.tw/image/getImage?i=https://www.books.com.tw/web/sys_bbot/v1/0011066010.jpg&v=671dd338k&w=348&h=348"
+      },
+      "9789863986478": {
+        isbn: "9789863986478",
+        title: "原子習慣：細微改變帶來巨大成就的實證法則",
+        subtitle: "Atomic Habits",
+        authors: ["詹姆斯·克利爾 (James Clear)"],
+        publisher: "方智",
+        publishDate: "2019-06-01",
+        pages: 304,
+        summary: "每天進步1%，一年後你會進步37倍；每天退步1%，一年後你會弱化到趨近於零！\n\n這就是「原子習慣」的驚人威力。本書作者詹姆斯·克利爾結合生物學、心理學與神經科學，提出建立好習慣、戒除壞習慣的四大法則：提示、渴望、回應、獎賞，是現代人自我提升必讀神書。",
+        coverUrl: "https://im1.book.com.tw/image/getImage?i=https://www.books.com.tw/web/sys_bbot/v1/0010822522.jpg&v=5ce3be2ak&w=348&h=348"
+      }
+    };
+
+    /* INITIALIZATION */
+    window.addEventListener('DOMContentLoaded', () => {
+      const inputEl = document.getElementById('isbnInput');
+      if (inputEl) {
+        inputEl.addEventListener('input', () => {
+          const clearBtn = document.getElementById('clearInputBtn');
+          if (clearBtn) {
+            clearBtn.classList.toggle('hidden', !inputEl.value);
+          }
+        });
+      }
+    });
+
+    /* HELPER: TOAST NOTIFICATION */
+    function showToast(message, type = "success") {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMessage');
+      const toastIcon = document.getElementById('toastIcon');
+      if (!toast || !toastMsg || !toastIcon) return;
+
+      toastMsg.textContent = message;
+      if (type === "error") {
+        toastIcon.className = "fa-solid fa-triangle-exclamation text-rose-400";
+      } else if (type === "info") {
+        toastIcon.className = "fa-solid fa-circle-info text-amber-400";
+      } else {
+        toastIcon.className = "fa-solid fa-circle-check text-emerald-400";
+      }
+
+      toast.classList.remove('translate-y-10', 'opacity-0', 'pointer-events-none');
+      setTimeout(() => {
+        toast.classList.add('translate-y-10', 'opacity-0', 'pointer-events-none');
+      }, 3200);
+    }
+
+    /* OPTIONAL API KEY MODAL HANDLERS (SAFE FOR GITHUB PAGES) */
+    function openApiKeyModal() {
+      const input = document.getElementById('customApiKeyInput');
+      if (input) input.value = localStorage.getItem('gemini_custom_api_key') || '';
+      document.getElementById('apiKeyModal').classList.remove('hidden');
+    }
+
+    function closeApiKeyModal() {
+      document.getElementById('apiKeyModal').classList.add('hidden');
+    }
+
+    function saveApiKey() {
+      const val = (document.getElementById('customApiKeyInput').value || '').trim();
+      if (val) {
+        localStorage.setItem('gemini_custom_api_key', val);
+        showToast("已儲存 Gemini API Key 至本機瀏覽器！");
+      } else {
+        localStorage.removeItem('gemini_custom_api_key');
+        showToast("已恢復預設檢索模式", "info");
+      }
+      closeApiKeyModal();
+    }
+
+    function clearApiKey() {
+      localStorage.removeItem('gemini_custom_api_key');
+      document.getElementById('customApiKeyInput').value = '';
+      showToast("已清除本機儲存的 API Key", "info");
+      closeApiKeyModal();
+    }
+
+    /* MODE SWITCHING */
+    function switchAppMode(mode) {
+      const btnSingle = document.getElementById('modeBtnSingle');
+      const btnBatch = document.getElementById('modeBtnBatch');
+      const secSingle = document.getElementById('modeSingleSection');
+      const secBatch = document.getElementById('modeBatchSection');
+
+      if (mode === 'single') {
+        btnSingle.className = "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-sm";
+        btnBatch.className = "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-600 hover:text-slate-900";
+        secSingle.classList.remove('hidden');
+        secBatch.classList.add('hidden');
+      } else {
+        btnBatch.className = "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-sm";
+        btnSingle.className = "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-600 hover:text-slate-900";
+        secBatch.classList.remove('hidden');
+        secSingle.classList.add('hidden');
+      }
+    }
+
+    /* ISBN CLEANER WITH SCIENTIFIC NOTATION SUPPORT */
+    function cleanAndFixIsbn(val) {
+      if (val === null || val === undefined) return '';
+      let str = String(val).trim();
+      
+      // Fix Excel Scientific Notation like 9.78626E+12
+      if (/^[\d.]+[eE]\+?\d+$/.test(str)) {
+        try {
+          str = Number(str).toLocaleString('fullwide', { useGrouping: false });
+        } catch (e) {
+          // Ignore conversion error
+        }
+      }
+      return str.replace(/[^0-9X]/gi, '');
+    }
+
+    function quickTestIsbn(isbn) {
+      const inputEl = document.getElementById('isbnInput');
+      inputEl.value = isbn;
+      document.getElementById('clearInputBtn').classList.remove('hidden');
+      executeIsbnSearch();
+    }
+
+    function clearSearchInput() {
+      document.getElementById('isbnInput').value = '';
+      document.getElementById('clearInputBtn').classList.add('hidden');
+      document.getElementById('emptyState').classList.remove('hidden');
+      document.getElementById('bookResultContainer').classList.add('hidden');
+    }
+
+    /* FETCH BOOK WITH TIMEOUT SAFEGUARD */
+    async function fetchBookWithTimeout(isbn, timeoutMs = 8000, knownTitle = '') {
+      let collectedCovers = [];
+
+      // 1. Try Google Books API
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+      try {
+        const response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`, {
+          signal: controller.signal
+        });
+        clearTimeout(timer);
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.items && data.items.length > 0) {
+            const info = data.items[0].volumeInfo;
+            const links = info.imageLinks || {};
+            [links.extraLarge, links.large, links.medium, links.thumbnail, links.smallThumbnail].forEach(u => {
+              if (u) {
+                const clean = u.replace('http:', 'https:').replace('&edge=curl', '');
+                collectedCovers.push(clean.replace('zoom=1', 'zoom=2'));
+                collectedCovers.push(clean);
+              }
+            });
+
+            if (info.description && info.description.trim().length > 10) {
+              return {
+                isbn: isbn,
+                title: info.title || knownTitle || `ISBN ${isbn}`,
+                subtitle: info.subtitle || "",
+                authors: info.authors || ["未知作者"],
+                publisher: info.publisher || "出版單位",
+                publishDate: info.publishedDate || "",
+                pages: info.pageCount || 0,
+                summary: info.description.trim(),
+                coverUrl: collectedCovers[0] || "",
+                coverUrls: [...new Set(collectedCovers)]
+              };
+            }
+          }
+        }
+      } catch (e) {
+        clearTimeout(timer);
+      }
+
+      // 2. Try Gemini AI API with Google Search Grounding (Summary + Real Cover URLs)
+      const apiKey = localStorage.getItem('gemini_custom_api_key') || "";
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+      const aiController = new AbortController();
+      const aiTimer = setTimeout(() => aiController.abort(), timeoutMs);
+
+      try {
+        const titleHint = knownTitle ? `（書名：${knownTitle}）` : '';
+        const promptText = `請上網搜尋 ISBN: ${isbn}${titleHint} 的繁體中文書目資料，務必找到博客來、誠品、讀墨 Readmoo、三民或 Google Books 的「完整內容簡介原文」以及「真實書籍封面圖片網址 (.jpg/.png)」。
+請以純 JSON 回傳，格式：
+{"title":"完整書名","publisher":"出版社","summary":"完整內容簡介原文","coverUrl":"最清晰的書籍封面圖片網址","coverUrls":["封面圖片網址1","封面圖片網址2"]}`;
+
+        const payload = {
+          contents: [{ parts: [{ text: promptText }] }],
+          tools: [{ "google_search": {} }]
+        };
+
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: aiController.signal
+        });
+        clearTimeout(aiTimer);
+
+        if (res.ok) {
+          const jsonResult = await res.json();
+          const text = jsonResult?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          const match = text.match(/\{[\s\S]*\}/);
+          if (match) {
+            const parsed = JSON.parse(match[0]);
+            if (parsed.coverUrl) collectedCovers.unshift(parsed.coverUrl);
+            if (Array.isArray(parsed.coverUrls)) {
+              parsed.coverUrls.forEach(u => { if (u) collectedCovers.push(u); });
+            }
+            if (parsed.summary && parsed.summary.trim().length > 10) {
+              return {
+                isbn: isbn,
+                title: parsed.title || knownTitle || `ISBN ${isbn}`,
+                subtitle: "",
+                authors: ["台灣出版品"],
+                publisher: parsed.publisher || "出版單位",
+                summary: parsed.summary.trim(),
+                coverUrl: collectedCovers[0] || "",
+                coverUrls: [...new Set(collectedCovers)]
+              };
+            }
+          }
+        }
+      } catch (e) {
+        clearTimeout(aiTimer);
+      }
+
+      throw new Error("Timeout or empty result");
+    }
+
+    /* ==================== SINGLE ISBN LOOKUP ENGINE ==================== */
+    async function executeIsbnSearch() {
+      const raw = document.getElementById('isbnInput').value;
+      const isbn = cleanAndFixIsbn(raw);
+
+      if (!isbn || (isbn.length !== 10 && isbn.length !== 13)) {
+        showToast("請輸入正確的 10 或 13 碼 ISBN 號碼", "error");
+        return;
+      }
+
+      document.getElementById('emptyState').classList.add('hidden');
+      document.getElementById('bookResultContainer').classList.add('hidden');
+
+      const progressCard = document.getElementById('searchProgressCard');
+      const progressTitle = document.getElementById('progressStepTitle');
+      const progressDetail = document.getElementById('progressSubDetail');
+      const progressPercent = document.getElementById('progressStepPercent');
+      const progressBar = document.getElementById('progressBarInner');
+
+      progressCard.classList.remove('hidden');
+      progressTitle.textContent = "正抓取數據庫簡介中...";
+      progressDetail.textContent = `> 檢索 ISBN: ${isbn}...`;
+      progressPercent.textContent = "40%";
+      progressBar.style.width = "40%";
+
+      // 1. Instant check in local preset cache
+      if (LOCAL_PRESET_BOOKS[isbn]) {
+        progressPercent.textContent = "100%";
+        progressBar.style.width = "100%";
+        await new Promise(r => setTimeout(r, 180));
+        progressCard.classList.add('hidden');
+        await renderSingleBookCard(LOCAL_PRESET_BOOKS[isbn]);
+        showToast("已秒速載入中文簡介原文！");
+        return;
+      }
+
+      // 2. Fetch from Google Books / Gemini API with timeout safeguard
+      try {
+        progressPercent.textContent = "70%";
+        progressBar.style.width = "70%";
+        progressDetail.textContent = `> 聯網抓取博客來 / Google Books 書目數據與真實封面...`;
+
+        const bookData = await fetchBookWithTimeout(isbn, 9000);
+
+        progressPercent.textContent = "100%";
+        progressBar.style.width = "100%";
+        await new Promise(r => setTimeout(r, 180));
+        progressCard.classList.add('hidden');
+
+        await renderSingleBookCard(bookData);
+        showToast("已成功載入書目細節與完整簡介！");
+      } catch (err) {
+        console.warn("Search fetch warning or timeout:", err);
+        progressCard.classList.add('hidden');
+
+        const fallbackBook = {
+          isbn: isbn,
+          title: `ISBN: ${isbn}`,
+          subtitle: "建議透過下方博客來或國家圖書館連結查看最即時簡介",
+          authors: ["詳見出版資訊"],
+          publisher: "出版單位",
+          summary: `已為您檢索 ISBN：${isbn}。\n目前開放資料庫暫無此書之完整內文，您可點擊上方按鈕前往「博客來」或「國家圖書館 ISBN 網」瀏覽最完整的介紹。`,
+          coverUrl: ""
+        };
+        await renderSingleBookCard(fallbackBook);
+        showToast("已為您建立圖書查詢卡片", "info");
+      }
+    }
+
+    async function renderSingleBookCard(data) {
+      currentSingleBookData = data;
+      document.getElementById('bookTitle').textContent = data.title;
+      document.getElementById('bookSubTitle').textContent = data.subtitle || data.title;
+      document.getElementById('badgeIsbn').textContent = `ISBN: ${data.isbn}`;
+      document.getElementById('badgePublisher').textContent = `出版社: ${data.publisher || '出版單位'}`;
+
+      document.getElementById('infoAuthor').textContent = (data.authors && data.authors.length) ? data.authors.join(', ') : "詳見簡介";
+      document.getElementById('infoDatePages').textContent = `${data.publishDate || '最新出版'} (${data.pages || '--'}頁)`;
+      document.getElementById('bookSummaryText').textContent = data.summary || "暫無詳細內容簡介。";
+
+      document.getElementById('linkBooksTW').href = `https://search.books.com.tw/search/query/key/${data.isbn}`;
+      document.getElementById('linkEslite').href = `https://www.eslite.com/search?keyword=${data.isbn}`;
+      document.getElementById('linkNcl').href = `https://isbn.ncl.edu.tw/NCL_ISBNNet/main_DisplayResult.php?P_ISBN=${data.isbn}`;
+
+      const coverImg = document.getElementById('bookCoverImg');
+      const coverSvg = document.getElementById('bookCoverSvg');
+      coverImg.classList.add('hidden');
+      coverSvg.classList.remove('hidden');
+      coverSvg.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-amber-500 text-lg mb-2"></i><span>正在載入真實書封...</span>`;
+
+      document.getElementById('bookResultContainer').classList.remove('hidden');
+
+      const realCoverDataUrl = await resolveBookCoverDataUrl(data);
+      if (realCoverDataUrl) {
+        data.coverDataUrl = realCoverDataUrl;
+        coverImg.src = realCoverDataUrl;
+        coverImg.classList.remove('hidden');
+        coverSvg.classList.add('hidden');
+      } else {
+        coverSvg.innerHTML = `<i class="fa-solid fa-book text-slate-300 text-2xl mb-2"></i><span>暫無可用封面</span>`;
+      }
+    }
+
+    /* ==================== PPTX ENGINE LOADER & SUMMARY HELPER ==================== */
+    function ensurePptxLoaded() {
+      return new Promise((resolve, reject) => {
+        if (window.PptxGenJS) {
+          return resolve(window.PptxGenJS);
+        }
+
+        const cdnUrls = [
+          "https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js",
+          "https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js"
+        ];
+
+        let idx = 0;
+        function tryNextCdn() {
+          if (window.PptxGenJS) return resolve(window.PptxGenJS);
+          if (idx >= cdnUrls.length) {
+            return reject(new Error("無法載入 PptxGenJS 簡報元件"));
+          }
+          const script = document.createElement('script');
+          script.src = cdnUrls[idx++];
+          script.onload = () => {
+            if (window.PptxGenJS) resolve(window.PptxGenJS);
+            else tryNextCdn();
+          };
+          script.onerror = () => tryNextCdn();
+          document.head.appendChild(script);
+        }
+
+        tryNextCdn();
+      });
+    }
+
+    function extractKeySummary(rawText, boxWidthInches = 7.8, boxHeightInches = 4.5, fontSize = 16.5) {
+      if (!rawText) return "暫無內容簡介。";
+
+      // Clean headers, ASCII divider lines (e.g. -------), and noisy symbol bullets
+      const cleaned = String(rawText)
+        .replace(/【[^】]*簡介[^】]*】/g, '')
+        .replace(/\r\n/g, '\n')
+        .replace(/^[─━\-_=*～~＝●◆■□▲△▼▽◢◣◤◥・•\s]{3,}$/gm, '')
+        .replace(/[◢◣◤◥]/g, '')
+        .trim();
+
+      const lines = cleaned
+        .split('\n')
+        .map(l => l.trim())
+        .filter(l => l.length > 0 && !/^[-_=*～~─━＝]+$/.test(l));
+
+      if (lines.length === 0) return "暫無內容簡介。";
+
+      // Visual height budget in points (1 inch = 72 pt)
+      const maxHeightPt = boxHeightInches * 72;
+      const lineHeightPt = fontSize * 1.45; // ~24pt
+      const paraGapPt = 8;
+      const maxLineWidthPt = boxWidthInches * 72;
+
+      function estimateVisualLines(str) {
+        let currentWidth = 0;
+        let lineCount = 1;
+        for (let i = 0; i < str.length; i++) {
+          const code = str.charCodeAt(i);
+          // Full-width CJK vs half-width ASCII character width estimation
+          const charW = code > 255 ? fontSize * 1.02 : fontSize * 0.56;
+          if (currentWidth + charW > maxLineWidthPt) {
+            lineCount++;
+            currentWidth = charW;
+          } else {
+            currentWidth += charW;
+          }
+        }
+        return lineCount;
+      }
+
+      const selected = [];
+      let usedHeightPt = 0;
+
+      for (const line of lines) {
+        const neededLines = estimateVisualLines(line);
+        const neededPt = neededLines * lineHeightPt + (selected.length > 0 ? paraGapPt : 0);
+
+        if (usedHeightPt + neededPt <= maxHeightPt) {
+          selected.push(line);
+          usedHeightPt += neededPt;
+        } else {
+          // Try fitting partial complete sentences within remaining height budget
+          const sentences = line.match(/[^。！？!?]+[。！？!?]?/g) || [line];
+          let partial = "";
+          for (const s of sentences) {
+            const candidate = partial + s;
+            const candLines = estimateVisualLines(candidate);
+            const candPt = candLines * lineHeightPt + (selected.length > 0 ? paraGapPt : 0);
+            if (usedHeightPt + candPt <= maxHeightPt) {
+              partial = candidate;
+            } else {
+              break;
+            }
+          }
+
+          if (partial.trim().length >= 8) {
+            selected.push(partial.trim());
+          } else if (selected.length === 0) {
+            // Ensure at least the opening excerpt is shown cleanly
+            const safeSlice = line.slice(0, 140).replace(/[，、；：,;:]+$/, '') + '。';
+            selected.push(safeSlice);
+          }
+          break;
+        }
+      }
+
+      return selected.join('\n');
+    }
+
+    /* ==================== REAL BOOK COVER RESOLVER ==================== */
+    function loadImageElementToDataUrl(imgSrc, useCorsAttr = false, timeoutMs = 4500) {
+      return new Promise((resolve) => {
+        if (!imgSrc) return resolve(null);
+        const img = new Image();
+        if (useCorsAttr) {
+          img.crossOrigin = 'Anonymous';
+        }
+        let settled = false;
+
+        const timer = setTimeout(() => {
+          if (!settled) {
+            settled = true;
+            resolve(null);
+          }
+        }, timeoutMs);
+
+        img.onload = () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          try {
+            // Reject tiny 1x1 tracking pixels or blank placeholders
+            if (img.naturalWidth < 55 || img.naturalHeight < 70) {
+              return resolve(null);
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL('image/jpeg', 0.92));
+          } catch (e) {
+            resolve(null);
+          }
+        };
+
+        img.onerror = () => {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timer);
+            resolve(null);
+          }
+        };
+
+        img.src = imgSrc;
+      });
+    }
+
+    async function loadExternalImageAsDataUrl(rawUrl, timeoutMs = 4500) {
+      if (!rawUrl || typeof rawUrl !== 'string') return null;
+      const cleanUrl = rawUrl.trim().replace(/^http:/i, 'https:');
+      if (!cleanUrl.startsWith('https://')) return null;
+
+      // 1. Primary: CORS-free proxy wsrv.nl (bypasses bookstore hotlink/CORS restrictions)
+      const wsrvPrimary = `https://wsrv.nl/?url=${encodeURIComponent(cleanUrl)}&w=650&output=jpg&q=90`;
+      const res1 = await loadImageElementToDataUrl(wsrvPrimary, true, timeoutMs);
+      if (res1) return res1;
+
+      // 2. Secondary: Direct load with CORS (works natively for Google Books & OpenLibrary)
+      const res2 = await loadImageElementToDataUrl(cleanUrl, true, Math.min(timeoutMs, 3000));
+      if (res2) return res2;
+
+      // 3. Tertiary: Backup weserv mirror
+      const wsrvMirror = `https://images.weserv.nl/?url=${encodeURIComponent(cleanUrl)}&w=650&output=jpg`;
+      const res3 = await loadImageElementToDataUrl(wsrvMirror, true, Math.min(timeoutMs, 3500));
+      if (res3) return res3;
+
+      return null;
+    }
+
+    async function searchCoverCandidatesFromApis(book) {
+      const candidates = [];
+      if (book.coverUrl) candidates.push(book.coverUrl);
+      if (Array.isArray(book.coverUrls)) candidates.push(...book.coverUrls);
+
+      const cleanIsbn = cleanAndFixIsbn(book.isbn);
+      const cleanTitle = (book.title || '').replace(/^圖書\s*\([^)]+\)$/, '').split(/[：:（(【]/)[0].trim();
+
+      // Source A: Google Books by ISBN
+      if (cleanIsbn) {
+        try {
+          const resp = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanIsbn}`);
+          if (resp.ok) {
+            const data = await resp.json();
+            (data.items || []).forEach(item => {
+              const links = item.volumeInfo?.imageLinks || {};
+              [links.extraLarge, links.large, links.medium, links.thumbnail, links.smallThumbnail].forEach(u => {
+                if (u) {
+                  const fixed = u.replace(/^http:/i, 'https:').replace('&edge=curl', '');
+                  candidates.push(fixed.replace('zoom=1', 'zoom=2'));
+                  candidates.push(fixed);
+                }
+              });
+            });
+          }
+        } catch (e) {}
+      }
+
+      // Source B: Google Books by Book Title (finds covers even when print vs ebook ISBN differs)
+      if (cleanTitle && cleanTitle.length >= 2) {
+        try {
+          const resp = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(cleanTitle)}&maxResults=5`);
+          if (resp.ok) {
+            const data = await resp.json();
+            (data.items || []).forEach(item => {
+              const links = item.volumeInfo?.imageLinks || {};
+              [links.large, links.medium, links.thumbnail].forEach(u => {
+                if (u) {
+                  const fixed = u.replace(/^http:/i, 'https:').replace('&edge=curl', '');
+                  candidates.push(fixed.replace('zoom=1', 'zoom=2'));
+                  candidates.push(fixed);
+                }
+              });
+            });
+          }
+        } catch (e) {}
+      }
+
+      // Source C: OpenLibrary & Google Books Direct Cover Endpoint
+      if (cleanIsbn) {
+        candidates.push(`https://books.google.com/books/content?vid=ISBN${cleanIsbn}&printsec=frontcover&img=1&zoom=1`);
+        candidates.push(`https://covers.openlibrary.org/b/isbn/${cleanIsbn}-L.jpg?default=false`);
+      }
+
+      return [...new Set(candidates.filter(Boolean))];
+    }
+
+    async function searchCoverViaGemini(book) {
+      const apiKey = localStorage.getItem('gemini_custom_api_key') || "";
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+      const cleanTitle = (book.title || '').replace(/^圖書\s*\([^)]+\)$/, '').trim();
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 9000);
+
+      try {
+        const promptText = `請上網搜尋這本書的「真實書籍封面圖片 URL」：
+書名：${cleanTitle || '未知'}
+ISBN：${book.isbn || '未知'}
+出版社：${book.publisher || '未知'}
+
+請從博客來 (books.com.tw)、誠品 (eslite.com)、讀墨 (readmoo.com)、三民網路書店 (sanmin.com.tw)、金石堂或 Google Books 找出該書真實封面的直接圖片網址 (例如 https://im1.book.com.tw/... 或 https://cdn.readmoo.com/... 或 https://s.eslite.com/...)。
+只回傳純 JSON：{"coverUrls":["圖片網址1","圖片網址2","圖片網址3"]}`;
+
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: promptText }] }],
+            tools: [{ "google_search": {} }]
+          }),
+          signal: controller.signal
+        });
+        clearTimeout(timer);
+
+        if (res.ok) {
+          const jsonResult = await res.json();
+          const text = jsonResult?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          const match = text.match(/\{[\s\S]*\}/);
+          if (match) {
+            const parsed = JSON.parse(match[0]);
+            if (Array.isArray(parsed.coverUrls)) {
+              return parsed.coverUrls.filter(u => typeof u === 'string' && u.startsWith('http'));
+            }
+          }
+        }
+      } catch (e) {
+        clearTimeout(timer);
+      }
+      return [];
+    }
+
+    async function resolveBookCoverDataUrl(book) {
+      if (book.coverDataUrl) return book.coverDataUrl;
+
+      // 1. Try existing & fast API candidates
+      const fastCandidates = await searchCoverCandidatesFromApis(book);
+      for (const url of fastCandidates) {
+        const dataUrl = await loadExternalImageAsDataUrl(url, 4000);
+        if (dataUrl) {
+          book.coverUrl = url;
+          book.coverDataUrl = dataUrl;
+          return dataUrl;
+        }
+      }
+
+      // 2. Deep search via Gemini Google Search specifically for the real book cover image
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        const aiUrls = await searchCoverViaGemini(book);
+        for (const url of aiUrls) {
+          const dataUrl = await loadExternalImageAsDataUrl(url, 4500);
+          if (dataUrl) {
+            book.coverUrl = url;
+            book.coverDataUrl = dataUrl;
+            return dataUrl;
+          }
+        }
+      }
+
+      return null;
+    }
+
+    async function exportSingleToPPT() {
+      const bookTitle = document.getElementById('bookTitle')?.textContent;
+      if (!bookTitle || bookTitle === '書名' || bookTitle === '未知書名') {
+        showToast("請先查詢書籍資料", "error");
+        return;
+      }
+
+      showToast("正在擷取真實書籍封面並產生 PPT 簡報檔...", "info");
+
+      const singleBook = currentSingleBookData || {
+        isbn: (document.getElementById('badgeIsbn')?.textContent || '').replace('ISBN: ', '').trim(),
+        title: bookTitle,
+        publisher: (document.getElementById('badgePublisher')?.textContent || '').replace('出版社: ', '').trim(),
+        summary: document.getElementById('bookSummaryText')?.textContent || '',
+        coverUrl: ''
+      };
+
+      const safeTitle = (singleBook.title || '圖書').replace(/[\\/:*?"<>|]/g, '_').slice(0, 15);
+      await generatePptxFromBooks([singleBook], `武陵高中圖書館_${safeTitle}_導讀簡報.pptx`);
+    }
+
+    async function exportBatchToPPT() {
+      if (batchDataRows.length === 0) {
+        showToast("尚無資料可供匯出 PPT", "error");
+        return;
+      }
+
+      const btnPpt = document.getElementById('btnExportPPT');
+      if (btnPpt) {
+        btnPpt.disabled = true;
+        btnPpt.classList.add('opacity-50');
+      }
+
+      await generatePptxFromBooks(batchDataRows, `武陵高中圖書館_新書導讀簡報_共${batchDataRows.length}本.pptx`);
+
+      if (btnPpt) {
+        btnPpt.disabled = false;
+        btnPpt.classList.remove('opacity-50');
+      }
+    }
+
+    async function generatePptxFromBooks(books, fileName) {
+      try {
+        const PptxClass = await ensurePptxLoaded();
+        const pptx = new PptxClass();
+        pptx.defineLayout({ name: 'WIDE_16_9', width: 13.33, height: 7.5 });
+        pptx.layout = 'WIDE_16_9';
+
+        // Resolve real book cover images for EVERY SINGLE BOOK in batches of 8
+        const coverDataUrls = new Array(books.length);
+        let resolvedCount = 0;
+
+        for (let i = 0; i < books.length; i += 8) {
+          const slice = books.slice(i, i + 8);
+          const statusEl = document.getElementById('batchProgressStatus');
+          if (statusEl) {
+            statusEl.textContent = `🖼️ 正在自動擷取每本書的真實封面照片：第 ${i + 1} ~ ${Math.min(i + 8, books.length)} / ${books.length} 本...`;
+          }
+          showToast(`正在載入真實書籍封面 (${Math.min(i + 8, books.length)} / ${books.length})...`, "info");
+
+          const resolvedSlice = await Promise.all(slice.map(b => resolveBookCoverDataUrl(b)));
+          resolvedSlice.forEach((url, offset) => {
+            coverDataUrls[i + offset] = url;
+            if (url) resolvedCount++;
+          });
+          if (batchDataRows.length > 0) renderBatchTable();
+        }
+
+        books.forEach((book, idx) => {
+          const slide = pptx.addSlide();
+          slide.background = { color: 'FFFFFF' };
+
+          // Left Column: Book Title (Dynamic font scaling for short & long titles)
+          const cleanTitle = (book.title || `圖書 #${idx + 1}`).trim();
+          let titleFontSize = 24;
+          if (cleanTitle.length > 48) titleFontSize = 15.5;
+          else if (cleanTitle.length > 32) titleFontSize = 17.5;
+          else if (cleanTitle.length > 18) titleFontSize = 20;
+
+          slide.addText(cleanTitle, {
+            x: 0.75, y: 0.52, w: 7.8, h: 1.0,
+            fontFace: "Microsoft JhengHei",
+            fontSize: titleFontSize,
+            bold: true,
+            color: '0F172A',
+            valign: 'middle',
+            wrap: true
+          });
+
+          // Subtle accent divider
+          slide.addShape(pptx.shapes.RECTANGLE, {
+            x: 0.75, y: 1.60, w: 1.35, h: 0.05,
+            fill: { color: 'D97706' }
+          });
+
+          // Left Column: Height-budgeted Summary (Strictly stays inside slide bounds)
+          const bodyFontSize = 16.5;
+          const summaryContent = extractKeySummary(book.summary || '（暫無內容簡介資料）', 7.8, 4.5, bodyFontSize);
+
+          slide.addText(summaryContent, {
+            x: 0.75, y: 1.82, w: 7.8, h: 4.75,
+            fontFace: "Microsoft JhengHei",
+            fontSize: bodyFontSize,
+            color: '1E293B',
+            valign: 'top',
+            wrap: true,
+            lineSpacing: 24,
+            paraSpaceAfter: 8
+          });
+
+          // Right Column: Real Book Cover Image
+          const coverImgData = coverDataUrls[idx] || book.coverDataUrl;
+          if (coverImgData) {
+            slide.addImage({
+              data: coverImgData,
+              x: 9.0, y: 0.7, w: 3.65, h: 5.25,
+              sizing: { type: 'contain', w: 3.65, h: 5.25 },
+              shadow: {
+                type: 'outer',
+                blur: 12,
+                offset: 4,
+                angle: 45,
+                color: '000000',
+                opacity: 0.2
+              }
+            });
+          } else if (book.coverUrl) {
+            slide.addImage({
+              path: book.coverUrl,
+              x: 9.0, y: 0.7, w: 3.65, h: 5.25,
+              sizing: { type: 'contain', w: 3.65, h: 5.25 }
+            });
+          }
+
+          // Subtle publisher & ISBN caption below book cover
+          const subMeta = [
+            book.publisher ? `出版社：${book.publisher}` : '',
+            book.isbn ? `ISBN：${book.isbn}` : ''
+          ].filter(Boolean).join('  |  ');
+
+          if (subMeta) {
+            slide.addText(subMeta, {
+              x: 8.85, y: 6.1, w: 3.95, h: 0.4,
+              fontFace: "Microsoft JhengHei",
+              fontSize: 10.5,
+              color: '64748B',
+              align: 'center'
+            });
+          }
+
+          // Minimal slide counter at bottom left
+          slide.addText(`${idx + 1} / ${books.length}`, {
+            x: 0.75, y: 6.95, w: 2.0, h: 0.3,
+            fontFace: "Microsoft JhengHei",
+            fontSize: 10.5,
+            color: '94A3B8',
+            align: 'left'
+          });
+        });
+
+        const statusEl = document.getElementById('batchProgressStatus');
+        if (statusEl) {
+          statusEl.textContent = `🎉 PPT 匯出完成（已成功載入 ${resolvedCount} / ${books.length} 本真實書籍封面）！`;
+        }
+
+        await pptx.writeFile({ fileName: fileName || "書籍簡介簡報.pptx" });
+        showToast(`PPT 簡報已順利導出下載（共 ${resolvedCount}/${books.length} 本真實封面）！`);
+      } catch (err) {
+        console.error("PPT generation failed:", err);
+        showToast("匯出 PPT 時發生錯誤，請稍後重試", "error");
+      }
+    }
+
+    /* ==================== BATCH EXCEL / CSV ENGINE ==================== */
+    function handleDragOver(e) {
+      e.preventDefault();
+      document.getElementById('dropZone').classList.add('border-emerald-500', 'bg-emerald-50/40');
+    }
+    function handleDragLeave(e) {
+      e.preventDefault();
+      document.getElementById('dropZone').classList.remove('border-emerald-500', 'bg-emerald-50/40');
+    }
+    function handleFileDrop(e) {
+      e.preventDefault();
+      handleDragLeave(e);
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        parseUploadedExcelFile(e.dataTransfer.files[0]);
+      }
+    }
+    function handleFileSelect(e) {
+      if (e.target.files && e.target.files[0]) {
+        parseUploadedExcelFile(e.target.files[0]);
+      }
+    }
+
+    function parseUploadedExcelFile(file) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          let workbook;
+
+          try {
+            workbook = XLSX.read(data, { type: 'array' });
+          } catch (zipErr) {
+            let text = new TextDecoder('utf-8').decode(data);
+            if (text.includes('\uFFFD')) {
+              try {
+                text = new TextDecoder('big5').decode(data);
+              } catch (big5Err) {
+                // Ignore fallback decoding error
+              }
+            }
+            workbook = XLSX.read(text, { type: 'string' });
+          }
+
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const jsonRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+          if (!jsonRows || jsonRows.length === 0) {
+            showToast("上傳的 Excel / CSV 檔案為空", "error");
+            return;
+          }
+
+          processRawExcelRows(jsonRows);
+        } catch (err) {
+          console.error(err);
+          showToast("解析 Excel / CSV 檔案失敗，請確保為有效的 .xlsx 或 .csv 檔案", "error");
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function processRawExcelRows(rawRows) {
+      batchDataRows = [];
+      originalHeaderRow = [];
+      document.getElementById('batchFailedAlert').classList.add('hidden');
+
+      if (!rawRows || rawRows.length === 0) return;
+
+      let isbnColIdx = -1;
+      let titleColIdx = -1;
+      let publisherColIdx = -1;
+      let firstRow = rawRows[0] || [];
+      let hasHeader = false;
+
+      for (let c = 0; c < firstRow.length; c++) {
+        const cellStr = String(firstRow[c] || '').trim().toLowerCase();
+        if (isbnColIdx === -1 && cellStr.includes('isbn')) {
+          isbnColIdx = c;
+          hasHeader = true;
+        }
+        if (titleColIdx === -1 && (cellStr.includes('書名') || cellStr.includes('title') || cellStr.includes('圖書名稱') || cellStr === '名稱')) {
+          titleColIdx = c;
+          hasHeader = true;
+        }
+        if (publisherColIdx === -1 && (cellStr.includes('出版社') || cellStr.includes('publisher') || cellStr.includes('出版單位'))) {
+          publisherColIdx = c;
+          hasHeader = true;
+        }
+      }
+
+      if (isbnColIdx === -1) isbnColIdx = 0;
+
+      let startRowIdx = 0;
+      if (hasHeader) {
+        originalHeaderRow = [...firstRow];
+        const hasSummaryCol = originalHeaderRow.some(h => String(h).includes('簡介') || String(h).toLowerCase().includes('summary'));
+        if (!hasSummaryCol) {
+          originalHeaderRow.push('內容簡介');
+        }
+        startRowIdx = 1;
+      } else {
+        let maxCols = 0;
+        rawRows.forEach(r => { if (r && r.length > maxCols) maxCols = r.length; });
+        for (let c = 0; c < maxCols; c++) {
+          originalHeaderRow.push(`欄位 ${c + 1}`);
+        }
+        originalHeaderRow.push('內容簡介');
+        startRowIdx = 0;
+      }
+
+      const summaryColIdx = originalHeaderRow.length - 1;
+
+      for (let r = startRowIdx; r < rawRows.length; r++) {
+        const row = rawRows[r];
+        if (!row || row.length === 0) continue;
+
+        const rawIsbnCell = row[isbnColIdx];
+        const cleanedIsbn = cleanAndFixIsbn(rawIsbnCell);
+
+        if (cleanedIsbn && (cleanedIsbn.length === 10 || cleanedIsbn.length === 13)) {
+          let originalCells = [...row];
+          const baseDataLen = originalHeaderRow.length - 1;
+          while (originalCells.length < baseDataLen) {
+            originalCells.push('');
+          }
+
+          let existingSummary = '';
+          if (row.length >= originalHeaderRow.length) {
+            existingSummary = String(row[summaryColIdx] || '').trim();
+          }
+
+          // Prefer book title directly from Excel column if available
+          let excelTitle = '';
+          if (titleColIdx !== -1 && row[titleColIdx] !== undefined && row[titleColIdx] !== null) {
+            excelTitle = String(row[titleColIdx]).trim();
+          } else {
+            // Heuristic: pick first non-ISBN, non-numeric string column as title if header lacked explicit label
+            for (let c = 0; c < baseDataLen; c++) {
+              if (c === isbnColIdx) continue;
+              const val = String(row[c] || '').trim();
+              if (val.length >= 2 && !/^\d+$/.test(val)) {
+                excelTitle = val;
+                break;
+              }
+            }
+          }
+
+          let excelPublisher = '';
+          if (publisherColIdx !== -1 && row[publisherColIdx] !== undefined && row[publisherColIdx] !== null) {
+            excelPublisher = String(row[publisherColIdx]).trim();
+          }
+
+          const preset = LOCAL_PRESET_BOOKS[cleanedIsbn];
+          const finalTitle = excelTitle || (preset ? preset.title : `圖書 (${cleanedIsbn})`);
+          const finalPublisher = excelPublisher || (preset ? (preset.publisher || '') : '');
+          const currentSummary = existingSummary || (preset ? preset.summary : '');
+
+          batchDataRows.push({
+            id: batchDataRows.length + 1,
+            isbn: cleanedIsbn,
+            originalCells: originalCells,
+            title: finalTitle,
+            hasExcelTitle: !!excelTitle,
+            publisher: finalPublisher,
+            coverUrl: preset ? (preset.coverUrl || '') : '',
+            coverUrls: preset && preset.coverUrl ? [preset.coverUrl] : [],
+            coverDataUrl: '',
+            summary: currentSummary,
+            status: currentSummary ? '已完成' : '待處理',
+            success: !!currentSummary,
+            failedAfterMax: false
+          });
+        }
+      }
+
+      if (batchDataRows.length === 0) {
+        showToast("未成功讀取到任何有效 ISBN (請確認包含 10/13 碼數字)", "error");
+        return;
+      }
+
+      renderBatchTable();
+      document.getElementById('batchTotalCountBadge').textContent = `共 ${batchDataRows.length} 筆資料`;
+      document.getElementById('batchProgressStatus').textContent = "讀取成功 (已自動讀取書名，簡介將新增於表格最右側)";
+      document.getElementById('batchControlBar').classList.remove('hidden');
+      document.getElementById('batchTableCard').classList.remove('hidden');
+
+      showToast(`已讀取 ${batchDataRows.length} 筆資料，將於最後一欄填入內容簡介！`);
+    }
+
+    function renderBatchTable() {
+      const tbody = document.getElementById('batchTableBody');
+      tbody.innerHTML = '';
+
+      batchDataRows.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-50 transition";
+
+        let statusHtml = '<span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[10px]">待處理</span>';
+        if (row.status === '已完成') {
+          statusHtml = '<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">✓ 已完成</span>';
+        } else if (row.failedAfterMax) {
+          statusHtml = `<span class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[10px] font-bold">❌ 5次查無(編號 #${row.id})</span>`;
+        } else if (row.status.startsWith('第')) {
+          statusHtml = `<span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold animate-pulse">⚠️ ${row.status}</span>`;
+        }
+
+        const thumbSrc = row.coverDataUrl || (row.coverUrl ? `https://wsrv.nl/?url=${encodeURIComponent(row.coverUrl)}&w=100&output=jpg` : '');
+        const coverCellHtml = thumbSrc
+          ? `<img src="${thumbSrc}" alt="封面" class="w-9 h-12 object-cover rounded shadow-sm mx-auto border border-slate-200" onerror="this.style.display='none'">`
+          : `<div class="w-9 h-12 rounded bg-slate-100 border border-slate-200 mx-auto flex items-center justify-center text-slate-300 text-[10px]"><i class="fa-solid fa-image"></i></div>`;
+
+        tr.innerHTML = `
+          <td class="p-3 text-center text-slate-500 font-mono font-bold">#${row.id}</td>
+          <td class="p-3 text-center">${coverCellHtml}</td>
+          <td class="p-3 font-mono font-semibold text-slate-900">${row.isbn}</td>
+          <td class="p-3 text-slate-800 font-medium">${row.title}</td>
+          <td class="p-3 text-slate-600 max-w-md truncate font-serif-tc">${row.summary || '<span class="text-slate-300 font-sans italic">等待填入簡介...</span>'}</td>
+          <td class="p-3 text-center">${statusHtml}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function stopBatchProcessing() {
+      isBatchProcessingActive = false;
+      document.getElementById('btnStopBatch').classList.add('hidden');
+      document.getElementById('btnStartBatch').disabled = false;
+      document.getElementById('btnStartBatch').classList.remove('opacity-50');
+      document.getElementById('batchProgressStatus').textContent = "⏹️ 已手動停止批次檢索。";
+      showToast("已停止查詢", "info");
+    }
+
+    async function startBatchProcessing() {
+      if (batchDataRows.length === 0) return;
+
+      isBatchProcessingActive = true;
+      const btnStart = document.getElementById('btnStartBatch');
+      const btnStop = document.getElementById('btnStopBatch');
+      const failedAlert = document.getElementById('batchFailedAlert');
+
+      failedAlert.classList.add('hidden');
+      btnStart.disabled = true;
+      btnStart.classList.add('opacity-50');
+      btnStop.classList.remove('hidden');
+
+      // Reset failedAfterMax flags for new run
+      batchDataRows.forEach(r => {
+        if (!r.success) r.failedAfterMax = false;
+      });
+
+      const MAX_ATTEMPTS = 5;
+
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        if (!isBatchProcessingActive) break;
+
+        const remaining = batchDataRows.filter(r => !r.success);
+        if (remaining.length === 0) break;
+
+        // Pass 1 uses 20 concurrent; Passes 2-5 use 5 concurrent with longer timeout
+        const concurrency = attempt === 1 ? 20 : 5;
+        const timeoutMs = attempt === 1 ? 5500 : 10000;
+
+        for (let i = 0; i < remaining.length; i += concurrency) {
+          if (!isBatchProcessingActive) break;
+
+          const chunk = remaining.slice(i, i + concurrency);
+          document.getElementById('batchProgressStatus').textContent =
+            attempt === 1
+              ? `🚀 【第 1 次併行查詢 (20筆/批)】正在處理第 ${i + 1} ~ ${Math.min(i + concurrency, remaining.length)} / ${remaining.length} 筆...`
+              : `🔄 【第 ${attempt} / ${MAX_ATTEMPTS} 次重試補漏】正在檢索剩餘 ${remaining.length} 筆中的第 ${i + 1} ~ ${Math.min(i + concurrency, remaining.length)} 筆...`;
+
+          await Promise.all(chunk.map(async (item) => {
+            if (LOCAL_PRESET_BOOKS[item.isbn]) {
+              if (!item.hasExcelTitle) {
+                item.title = LOCAL_PRESET_BOOKS[item.isbn].title;
+              }
+              item.summary = LOCAL_PRESET_BOOKS[item.isbn].summary;
+              if (!item.publisher) item.publisher = LOCAL_PRESET_BOOKS[item.isbn].publisher || '';
+              if (!item.coverUrl) item.coverUrl = LOCAL_PRESET_BOOKS[item.isbn].coverUrl || '';
+              await resolveBookCoverDataUrl(item);
+              item.status = '已完成';
+              item.success = true;
+              item.failedAfterMax = false;
+            } else {
+              try {
+                const knownTitle = item.hasExcelTitle ? item.title : '';
+                const res = await fetchBookWithTimeout(item.isbn, timeoutMs, knownTitle);
+                if (res && res.summary && res.summary.trim().length > 10) {
+                  if (!item.hasExcelTitle && res.title) {
+                    item.title = res.title;
+                  }
+                  item.summary = res.summary.trim();
+                  if (!item.publisher && res.publisher) item.publisher = res.publisher;
+                  if (res.coverUrl) item.coverUrl = res.coverUrl;
+                  if (res.coverUrls) item.coverUrls = res.coverUrls;
+                  await resolveBookCoverDataUrl(item);
+                  item.status = '已完成';
+                  item.success = true;
+                  item.failedAfterMax = false;
+                } else {
+                  throw new Error("簡介不足");
+                }
+              } catch (e) {
+                item.status = attempt < MAX_ATTEMPTS ? `第${attempt}次未查出，待重試` : '5次查詢未果';
+                item.success = false;
+              }
+            }
+          }));
+
+          renderBatchTable();
+        }
+
+        const stillUnfound = batchDataRows.filter(r => !r.success);
+        if (stillUnfound.length === 0) {
+          break;
+        } else if (attempt < MAX_ATTEMPTS && isBatchProcessingActive) {
+          const successNow = batchDataRows.length - stillUnfound.length;
+          document.getElementById('batchProgressStatus').textContent =
+            `⚠️ 第 ${attempt} 次完成（已成功 ${successNow} 筆），尚有 ${stillUnfound.length} 筆未查出，準備進行第 ${attempt + 1} 次查詢...`;
+          await new Promise(r => setTimeout(r, 1200));
+        }
+      }
+
+      // Final evaluation after up to 5 attempts
+      const finalUnfound = batchDataRows.filter(r => !r.success);
+      const finalSuccessCount = batchDataRows.length - finalUnfound.length;
+
+      if (finalUnfound.length > 0 && isBatchProcessingActive) {
+        const unfoundNumbers = finalUnfound.map(r => `#${r.id}`).join('、');
+        finalUnfound.forEach(item => {
+          item.failedAfterMax = true;
+          item.status = '5次查詢未果';
+        });
+        renderBatchTable();
+
+        document.getElementById('batchProgressStatus').textContent =
+          `⚠️ 已完成 ${MAX_ATTEMPTS} 次查詢：成功 ${finalSuccessCount} / ${batchDataRows.length} 筆，有 ${finalUnfound.length} 筆未能查到。`;
+        
+        const alertTextEl = document.getElementById('batchFailedAlertText');
+        alertTextEl.textContent = `已完成 5 次查詢，以下編號的書籍未能查到內容簡介：編號 ${unfoundNumbers}（共 ${finalUnfound.length} 本）。`;
+        failedAlert.classList.remove('hidden');
+        showToast(`查詢結束：編號 ${unfoundNumbers} 經 5 次查詢仍未查到`, "error");
+      } else if (finalUnfound.length === 0) {
+        document.getElementById('batchProgressStatus').textContent =
+          `🎉 全部 100% 查詢成功完成 (共 ${batchDataRows.length} 筆)！`;
+        showToast("全部書籍皆已成功查詢並填入內容簡介！");
+      }
+
+      isBatchProcessingActive = false;
+      btnStop.classList.add('hidden');
+      btnStart.disabled = false;
+      btnStart.classList.remove('opacity-50');
+    }
+
+    function exportProcessedExcel() {
+      if (batchDataRows.length === 0) {
+        showToast("尚無資料可供匯出", "error");
+        return;
+      }
+
+      const aoaData = [];
+      aoaData.push(originalHeaderRow);
+
+      const baseLen = originalHeaderRow.length - 1;
+
+      batchDataRows.forEach(r => {
+        const rowData = [...r.originalCells];
+        const finalRow = rowData.slice(0, baseLen);
+        while (finalRow.length < baseLen) {
+          finalRow.push('');
+        }
+        finalRow.push(r.summary || '');
+        aoaData.push(finalRow);
+      });
+
+      const worksheet = XLSX.utils.aoa_to_sheet(aoaData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "武陵高中圖書館書目簡介");
+
+      XLSX.writeFile(workbook, `武陵高中圖書館_ISBN書籍簡介對照表_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      showToast("已匯出！所有原始欄位完整保留，簡介已填入最右側欄位。");
+    }
+
+    function downloadSampleExcel() {
+      const sampleAOA = [
+        ["項次", "ISBN", "書名", "出版社", "備註", "內容簡介"],
+        [1, "9786267913550", "雅思閱讀高分技巧，三步驟突破6.5+", "EZ叢書館", "自學用", ""],
+        [2, "9786264188692", "不靠人類過一年：華爾街記者365日全AI生活實錄", "遠流出版", "重點推薦", ""],
+        [3, "9789863986478", "原子習慣：細微改變帶來巨大成就的實證法則", "方智", "暢銷書", ""]
+      ];
+
+      const ws = XLSX.utils.aoa_to_sheet(sampleAOA);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "多欄位範例");
+      XLSX.writeFile(wb, "多欄位ISBN範例檔.xlsx");
+    }
+  </script>
+</body>
+</html>
